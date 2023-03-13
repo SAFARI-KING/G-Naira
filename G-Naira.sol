@@ -7,7 +7,10 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract G_Naira is ERC20 {
 
+    // governor controls the contract
     address payable public Governor;
+
+    // FG appoints governor and transfers ownership
     address payable public FG;
 
     mapping(address => uint256) private _balances;
@@ -30,10 +33,12 @@ contract G_Naira is ERC20 {
     uint public totalSigners;
     uint public requiredSigners;
 
+    // get number of multi-signers
     function getMultiSigs()external view returns(address[] memory){
         return multiSigs;
     }
 
+    // set number of required signers to approve a transaction
     function setRequired()internal{
         requiredSigners = (multiSigs.length/2) + 1;
     }
@@ -41,6 +46,7 @@ contract G_Naira is ERC20 {
     Transaction[] public transactions;
     mapping(uint => mapping(address => bool)) public isApproved;
 
+    // get all transactions
     function getTransactions()external view returns(Transaction[] memory){
         return transactions;
     }
@@ -49,6 +55,7 @@ contract G_Naira is ERC20 {
         FG = payable(msg.sender);
     }
 
+    // add an address to the multi-sig
     function addMultiSig(address multiSig) external onlyGovernor {
 
         require(multiSig != address(0), "Invalid Address!");
@@ -60,6 +67,7 @@ contract G_Naira is ERC20 {
         setRequired();
     }
 
+    // remove address from multi-sig
     function removeMultiSig(address multiSig) public onlyGovernor {
 
         require(isMultiSig[multiSig], "Owner does not exist!");
@@ -79,11 +87,13 @@ contract G_Naira is ERC20 {
         setRequired();
     }
 
+    // only the governor can submit a mint request
     function mint(address _to,uint _value) external onlyGovernor {
         transactions.push(Transaction(_to,_value,"mint",false));
         emit newTx(transactions.length-1);
     }
 
+    // only the governor can submit a burn request
     function burn(address _to,uint _value) external onlyGovernor {
         require(_value <= _totalSupply, "Value greater than totalSupply!");
         require(_value <= _balances[_to], "Value greater than balance!");
@@ -91,11 +101,13 @@ contract G_Naira is ERC20 {
         emit newTx(transactions.length-1);
     }
 
+    // only multi signers can approve pending transactions
     function multiSigApprove(uint _txId) external onlySigners txExists(_txId) notApproved(_txId) notExecuted(_txId){
         isApproved[_txId][msg.sender] = true;
         emit Approve(msg.sender, _txId);
     }
 
+    // get approval count of a transaction
     function getApproval(uint _txId) public view txExists(_txId) returns(uint count){
         for(uint i; i < multiSigs.length; i++){
             if(isApproved[_txId][multiSigs[i]]){
@@ -104,6 +116,7 @@ contract G_Naira is ERC20 {
         }
     }
 
+    // only governor can execute approved transactions
     function multiSigExecute(uint _txId) external onlyGovernor txExists(_txId) notExecuted(_txId){
         require(getApproval(_txId) >= requiredSigners, "Aprovals less than required!");
         Transaction storage transaction = transactions[_txId];
@@ -119,6 +132,7 @@ contract G_Naira is ERC20 {
         emit Execute(_txId);
     } 
 
+    // to revoke an approval 
     function revokeApproval(uint _txId) external onlySigners txExists(_txId) notExecuted(_txId){
         require(isApproved[_txId][msg.sender], "Transaction not yet approved!");
         isApproved[_txId][msg.sender] = false;
@@ -127,6 +141,7 @@ contract G_Naira is ERC20 {
 
     mapping(address => bool) public isBlacklist;
 
+    // only governor can blacklist an address
     function setBlacklist(address _account) external onlyGovernor {
         require(_account != Governor, "The GOVERNOR can't be blacklisted!");
 
@@ -134,6 +149,7 @@ contract G_Naira is ERC20 {
         isBlacklist[_account] = true;
     }
 
+    // only governor can whitelist an address
     function unSetBlacklist(address _account) external onlyGovernor {
         require(isBlacklist[_account], "Address is not blacklisted!");
         isBlacklist[_account] = false;
@@ -233,6 +249,7 @@ contract G_Naira is ERC20 {
         _;
     }
 
+    // only FG can appoint new governor
     function setNewGovernor(address payable newGovernor) external onlyFG newOfficial(newGovernor) {
         // Removing old governor
         if(isMultiSig[Governor]){
@@ -254,6 +271,7 @@ contract G_Naira is ERC20 {
         setRequired();
     }
 
+    // only FG can transfer ownership
     function transferOwnership(address payable newOwner) external onlyFG newOfficial(newOwner){
         FG = newOwner;
     }
